@@ -6,5 +6,8 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-rdkafka = { version = "0.26.0", features = ["cmake-build", "ssl"]}
+rdkafka = { version = "0.26.0", features = ["cmake-build", "ssl", "ssl-vendored", "gssapi-vendored"]}
 keyring = "0.10.1"
+dirs = "3.0.2"
+serde = {version = "1.0.126", features = ["derive"]}
+serde_yaml = "0.8.17"
