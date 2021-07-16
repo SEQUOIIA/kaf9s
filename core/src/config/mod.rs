@@ -146,4 +146,19 @@ impl ConfigManager{
 
         cm
     }
+
+    pub fn get_current_context_as_ref(&self) -> Context {
+        return match &self.conf.current_context {
+            Some(key) => {
+                self.contexts.get(key).expect("Unable to retrieve context").clone()
+            },
+            None => {
+                self.contexts.values().next().expect("Unable to retrieve context").clone()
+            }
+        }
+    }
+
+    pub fn set_current_context(&mut self, val : String) {
+        self.conf.current_context = Some(val);
+    }
 }
