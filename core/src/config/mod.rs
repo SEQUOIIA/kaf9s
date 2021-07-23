@@ -52,7 +52,7 @@ pub struct ContextFile {
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(default)]
 pub struct Config {
-    pub refresh_rate : u32, // in milliseconds
+    pub refresh_rate : i32, // in milliseconds
     pub current_context : Option<String>
 }
 
@@ -147,7 +147,29 @@ impl ConfigManager{
         cm
     }
 
-    pub fn get_current_context_as_ref(&self) -> Context {
+    pub fn reconcile(&mut self) {
+        for (_, user) in &mut self.users {
+            if user.data.contains_key("kafka.sasl.username") {
+                match get_secret_from_keyring(&user.name) {
+                    Ok(_) => {
+                        continue;
+                    },
+                    Err(err) => {
+                        if let _NoPasswordFound = err {
+                            println!("User {} has no stored password. Please enter one now and continue by pressing ENTER", user.name);
+                            let mut input = rpassword::read_password_from_tty(None).expect("Unable to read password");
+                            set_secret_in_keyring(&user.name, &input);
+                        } else {
+                            panic!(err);
+                        }
+                    }
+                }
+
+            }
+        }
+    }
+
+    pub fn get_current_context(&self) -> Context {
         return match &self.conf.current_context {
             Some(key) => {
                 self.contexts.get(key).expect("Unable to retrieve context").clone()
@@ -156,6 +178,17 @@ impl ConfigManager{
                 self.contexts.values().next().expect("Unable to retrieve context").clone()
             }
         }
+    }
+
+    fn save_user_secrets(&self) {
+        let serialised = bson::to_document(&self.conf).expect("Unable to serialise to bson");
+        let mut buf = Vec::new();
+        serialised.to_writer(&mut buf);
+        println!("{:?}", buf);
+    }
+
+    fn load_user_secrets(&self) {
+
     }
 
     pub fn set_current_context(&mut self, val : String) {
