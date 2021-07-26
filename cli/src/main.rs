@@ -2,7 +2,7 @@ fn main() {
     println!("Hello, world!");
 
     let mut cm = kaf9s_core::config::ConfigManager::load();
-    cm.bson_test();
+    cm.save_user_secrets();
     std::process::exit(1);
     cm.reconcile();
     let current_context = cm.get_current_context();

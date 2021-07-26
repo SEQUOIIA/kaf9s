@@ -180,7 +180,7 @@ impl ConfigManager{
         }
     }
 
-    fn save_user_secrets(&self) {
+    pub fn save_user_secrets(&self) {
         let serialised = bson::to_document(&self.conf).expect("Unable to serialise to bson");
         let mut buf = Vec::new();
         serialised.to_writer(&mut buf);
