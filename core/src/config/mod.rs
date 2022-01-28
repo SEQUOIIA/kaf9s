@@ -4,24 +4,10 @@ use std::path::Path;
 use std::io::{Write, Read};
 use serde::{Serialize, Deserialize};
 use std::fs::DirEntry;
+use rdkafka::ClientConfig;
+use crate::error::ConfigError;
 
 const APP_NAME : &str = "kaf9s";
-
-pub fn get_secret_from_keyring(input : &str) -> Result<String, KeyringError> {
-    let key = get_key(&input);
-    let key_store = keyring::Keyring::new(&key, "");
-    key_store.get_password()
-}
-
-pub fn get_key(input : &str) -> String {
-    format!("{}/{}", APP_NAME, input)
-}
-
-pub fn set_secret_in_keyring(input : &str, val : &str) -> Result<(), KeyringError> {
-    let key = get_key(&input);
-    let key_store = keyring::Keyring::new(&key, "");
-    key_store.set_password(val)
-}
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct Context {
@@ -147,28 +133,6 @@ impl ConfigManager{
         cm
     }
 
-    pub fn reconcile(&mut self) {
-        for (_, user) in &mut self.users {
-            if user.data.contains_key("kafka.sasl.username") {
-                match get_secret_from_keyring(&user.name) {
-                    Ok(_) => {
-                        continue;
-                    },
-                    Err(err) => {
-                        if let _NoPasswordFound = err {
-                            println!("User {} has no stored password. Please enter one now and continue by pressing ENTER", user.name);
-                            let mut input = rpassword::read_password_from_tty(None).expect("Unable to read password");
-                            set_secret_in_keyring(&user.name, &input);
-                        } else {
-                            panic!(err);
-                        }
-                    }
-                }
-
-            }
-        }
-    }
-
     pub fn get_current_context(&self) -> Context {
         return match &self.conf.current_context {
             Some(key) => {
@@ -180,18 +144,31 @@ impl ConfigManager{
         }
     }
 
-    pub fn save_user_secrets(&self) {
-        let serialised = bson::to_document(&self.conf).expect("Unable to serialise to bson");
-        let mut buf = Vec::new();
-        serialised.to_writer(&mut buf);
-        println!("{:?}", buf);
-    }
-
-    fn load_user_secrets(&self) {
-
-    }
-
     pub fn set_current_context(&mut self, val : String) {
         self.conf.current_context = Some(val);
+    }
+
+    pub fn context_to_kafka_config(&self, context_name : &str) -> Result<rdkafka::config::ClientConfig, ConfigError> {
+        let context = self.contexts.get(context_name).ok_or(ConfigError::ContextNotFound(context_name.to_owned()))?;
+        let cluster = self.clusters.get(&context.cluster).ok_or(ConfigError::Message("Cluster specified in Context doesn't exist".to_owned()))?;
+        let user = self.users.get(&context.user).ok_or(ConfigError::Message("User specified in Context doesn't exist".to_owned()))?;
+
+        let mut kafka_config = rdkafka::config::ClientConfig::new();
+        kafka_config.set_log_level(rdkafka::config::RDKafkaLogLevel::Debug);
+
+        for (k, v) in &cluster.data {
+            if k.starts_with("kafka.") {
+                let (_, kafka_key) = k.split_once("kafka.").unwrap();
+                kafka_config.set(kafka_key, v);
+            }
+        }
+        for (k, v) in &user.data {
+            if k.starts_with("kafka.") {
+                let (_, kafka_key) = k.split_once("kafka.").unwrap();
+                kafka_config.set(kafka_key, v);
+            }
+        }
+
+        Ok(kafka_config)
     }
 }
